@@ -1,0 +1,107 @@
+__include__: [
+  '../dataset/coco_detection.yml',
+  '../runtime.yml',
+  './include/dataloader.yml',
+  './include/optimizer.yml',
+  './include/rtdetrv2_r50vd.yml',
+]
+
+output_dir: ./output/rtdetrv2_r50vd_drone_gray1ch_temporal
+
+num_classes: 1
+remap_mscoco_category: False
+
+# Fine-tune from best RGB checkpoint.
+# conv1_1 weights are adapted RGB→Gray by channel averaging (mean dim=1).
+# All other weights load normally via strict=False in presnet.py.
+tuning: ./output/rtdetrv2_r50vd_drone/best.pth
+
+use_amp: True
+
+task: detection
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox']
+
+# ── BACKBONE: 1-channel grayscale input ───────────────────────────────────────
+PResNet:
+  depth: 50
+  variant: d
+  freeze_at: 0
+  return_idx: [1, 2, 3]
+  num_stages: 4
+  freeze_norm: True
+  pretrained: True
+  in_channels: 1            # ← true single-channel input
+
+# ── OPTIMIZER ─────────────────────────────────────────────────────────────────
+optimizer:
+  type: AdamW
+  lr: 0.00005
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+# ── TRAIN DATALOADER ──────────────────────────────────────────────────────────
+# Images on disk are saved as 3-channel JPEGs (RGB values converted from gray).
+# The Grayscale transform converts them to 1-channel BEFORE ConvertPILImage,
+# so the tensor fed to the backbone is always [1, H, W].
+#
+# Transform order matters:
+#   1. Augmentations run first while image is still 3-channel PIL (safe for all ops)
+#   2. Grayscale converts to 1-channel PIL
+#   3. ConvertPILImage makes it a float32 tensor [1, H, W]
+#   4. ConvertBoxes normalises the boxes
+train_dataloader:
+  total_batch_size: 4
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /home/devananth/office/Vision/Dataset/Data_Gray/images/train/
+    ann_file:   /home/devananth/office/Vision/Dataset/Data_Gray/annotations/train.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops:
+        - {type: RandomPhotometricDistort}      # runs on 3ch PIL — safe
+        - {type: RandomZoomOut}
+        - {type: RandomIoUCrop}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertToGrayscale}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy:
+        name: stop_epoch
+        epoch: 71
+        ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
+  shuffle: True
+  num_workers: 4
+  drop_last: True
+  collate_fn:
+    type: BatchImageCollateFunction
+    scales: [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
+    stop_epoch: 71
+
+# ── VAL DATALOADER ────────────────────────────────────────────────────────────
+val_dataloader:
+  total_batch_size: 4
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /home/devananth/office/Vision/Dataset/Data_Gray/images/val/
+    ann_file:   /home/devananth/office/Vision/Dataset/Data_Gray/annotations/val.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertToGrayscale}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+  shuffle: False
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
