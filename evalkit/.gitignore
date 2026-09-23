@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+# results/
+_selftest/
+# per-run raw files: large, and rebuilt by re-running / re-scoring
+results/*/preds.json
+results/*/gt.json

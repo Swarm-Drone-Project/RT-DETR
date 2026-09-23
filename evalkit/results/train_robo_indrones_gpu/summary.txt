@@ -1,0 +1,40 @@
+==============================================================
+  train_robo_indrones_gpu
+  rtdetrv2 | data_set/indrones_full_test/test | imgsz=640
+  input: grayscale (1-channel)
+  protocol v1.0: OK
+==============================================================
+
+ACCURACY
+  mAP@0.50:0.95      0.2869
+  mAP@0.50           0.5308
+  mAP@0.75           0.2581
+  AR@100             0.3852
+
+AP BY OBJECT SIZE
+  tiny     (   0-12px)  mAP@0.50=0.0000   mAP@0.50:0.95=0.0000
+  small    (  12-24px)  mAP@0.50=0.3304   mAP@0.50:0.95=0.0744
+  medium   (  24-48px)  mAP@0.50=0.6173   mAP@0.50:0.95=0.2436
+  large    ( 48-infpx)  mAP@0.50=0.8126   mAP@0.50:0.95=0.5643
+
+OPERATING POINTS
+  best F1            0.5825  @ conf=0.718  (P=0.679 R=0.510)
+  recall @ P>=90%    0.2700  @ conf=0.8371
+  recall @ P>=95%    0.2200  @ conf=0.8563
+  recall @ P>=99%    0.1600  @ conf=0.8826
+
+AT DEPLOYMENT CONF = 0.25
+  precision          0.1662
+  recall             0.6551
+  F1                 0.2651
+  FP per empty frame 2.9040   (40435 FPs over 13924 empty frames)
+
+LATENCY (batch=1, end-to-end incl. preprocess + NMS)
+  mean               7.72 ms   (129.5 FPS)
+  p50 / p95 / p99    7.63 / 8.38 / 9.22 ms
+  worst case FPS     108.5  (at p99)
+  peak VRAM          264.5 MB
+
+MODEL
+  parameters         36,847,235
+  weights file       477.25 MB

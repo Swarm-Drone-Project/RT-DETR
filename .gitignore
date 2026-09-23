@@ -1,0 +1,10 @@
+# Kept on disk, never committed
+*.pth
+train_robo/
+data_set/
+_selftest/
+/results/
+.venv/
+.claude/
+__pycache__/
+*.pyc

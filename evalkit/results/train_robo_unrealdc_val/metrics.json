@@ -1,0 +1,159 @@
+{
+  "run": {
+    "name": "train_robo_unrealdc_val",
+    "format": "rtdetrv2",
+    "weights": "train_robo.pth",
+    "dataset": "data_set/unreal_engine_dc_val",
+    "split": "val",
+    "imgsz": 640,
+    "conf_floor": 0.001,
+    "operating_conf": 0.25,
+    "nms_iou": 0.65,
+    "device": "cuda",
+    "sequential": false,
+    "timestamp": "2026-09-22T10:53:12+00:00",
+    "python": "3.12.3"
+  },
+  "protocol": {
+    "version": "1.0",
+    "status": "OK",
+    "comparable": true,
+    "frozen": {
+      "conf": 0.001,
+      "nms_iou": 0.65,
+      "max_det": 300,
+      "operating_conf": 0.25,
+      "split": "val"
+    },
+    "deviations": {}
+  },
+  "dataset": {
+    "images": 19505,
+    "annotations": 13585,
+    "empty_images": 5920,
+    "classes": [
+      "drone"
+    ]
+  },
+  "model": {
+    "params": 36847235,
+    "weights_mb": 477.25,
+    "input_channels": 1
+  },
+  "metrics": {
+    "accuracy": {
+      "map50_95": 0.0702,
+      "map50": 0.1399,
+      "map75": 0.0631,
+      "ar_1": 0.0974,
+      "ar_10": 0.1155,
+      "ar_100": 0.1302
+    },
+    "by_size": {
+      "tiny": {
+        "map50_95": 0.0,
+        "map50": 0.0,
+        "px_range": "0-12"
+      },
+      "small": {
+        "map50_95": 0.0,
+        "map50": 0.0,
+        "px_range": "12-24"
+      },
+      "medium": {
+        "map50_95": 0.0,
+        "map50": 0.0,
+        "px_range": "24-48"
+      },
+      "large": {
+        "map50_95": 0.1979,
+        "map50": 0.4027,
+        "px_range": "48-inf"
+      }
+    },
+    "per_class": {
+      "drone": {
+        "map50_95": 0.0702,
+        "map50": 0.1399
+      }
+    },
+    "curve": {
+      "best_f1": 0.2191,
+      "best_f1_conf": 0.7488,
+      "best_f1_precision": 0.5037,
+      "best_f1_recall": 0.14,
+      "recall_at_p90": 0.07,
+      "conf_at_p90": 0.8472,
+      "recall_at_p95": 0.06,
+      "conf_at_p95": 0.8558,
+      "recall_at_p99": 0.04,
+      "conf_at_p99": 0.8712
+    },
+    "operating_point": {
+      "conf": 0.25,
+      "iou": 0.5,
+      "confusion_matrix": [
+        [
+          2707,
+          45028
+        ],
+        [
+          10878,
+          0
+        ]
+      ],
+      "per_class": {
+        "drone": {
+          "tp": 2707,
+          "fp": 45028,
+          "fn": 10878,
+          "precision": 0.0567,
+          "recall": 0.1993,
+          "f1": 0.0883
+        }
+      },
+      "precision": 0.0567,
+      "recall": 0.1993,
+      "f1": 0.0883,
+      "empty_frames": 5920,
+      "fp_on_empty_frames": 15468,
+      "fp_per_empty_frame": 2.6128
+    },
+    "score_calibration": {
+      "distinct_scores": 254334,
+      "degenerate": false
+    },
+    "tracking": {
+      "conf": 0.25,
+      "iou": 0.5,
+      "frames_total": 19505,
+      "frames_with_gt": 13585,
+      "frames_empty": 5920,
+      "frames_predicted": 19130,
+      "hits": 2490,
+      "misses": 11095,
+      "false_alarms": 5630,
+      "success_rate": 0.1833,
+      "precision": 0.1302,
+      "recall": 0.1833,
+      "f1": 0.1522,
+      "mean_iou": 0.1761,
+      "false_alarm_rate": 0.951
+    }
+  },
+  "latency": {
+    "n_samples": 200,
+    "mean_ms": 16.449991634726757,
+    "p50_ms": 16.454183001769707,
+    "p90_ms": 17.452483499073423,
+    "p95_ms": 17.829813298158115,
+    "p99_ms": 18.754340711893743,
+    "min_ms": 14.487880995147862,
+    "max_ms": 20.327546997577883,
+    "std_ms": 0.8744540219803404,
+    "fps_mean": 60.79030446975729,
+    "fps_p99": 53.32098927720844,
+    "peak_vram_mb": 264.5,
+    "gpu_name": "NVIDIA RTX PRO 5000 Blackwell"
+  }
+}
