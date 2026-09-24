@@ -68,10 +68,13 @@ gdown 1IYMBePuUbDc-XlKewqYTOo0g3I8FiGzx -O train_robo.pth
 2. Click **Download**. Google may warn that it can't scan a file this large for
    viruses — click **Download anyway**.
 3. Move the downloaded file into the repo root and name it exactly
-   `train_robo.pth`. For example, if it landed in `~/Downloads`:
+   `train_robo.pth`. It usually downloads to `~/Downloads/train_robo.pth`, so
+   from the repo root run:
    ```bash
-   mv ~/Downloads/<downloaded-file-name>.pth ./train_robo.pth
+   mv ~/Downloads/train_robo.pth ./train_robo.pth
    ```
+   If your browser saved it under another name (e.g. `train_robo (1).pth`),
+   use that name in quotes: `mv "$HOME/Downloads/train_robo (1).pth" ./train_robo.pth`
 
 **If gdown says `Cannot retrieve the public link of the file`**, or the browser
 says **"You need access"**: the file is not shared publicly. Click
