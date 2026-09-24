@@ -1,9 +1,17 @@
 """
 dataset.py — load a YOLO-format val split and convert ground truth to COCO.
 
-Handles both layouts you'll meet in practice:
+Finds the split, in this order:
   A) <root>/images/val/*.jpg  + <root>/labels/val/*.txt
   B) <root>/valid/images/*.jpg + <root>/valid/labels/*.txt   (Roboflow export)
+  C) --split is a .txt list file of image paths (one per line)
+  D) the dataset's own data.yaml, e.g. `val: splits/val.txt` or `val: images`
+     — a list file or a folder, exactly as Ultralytics reads it
+
+For C and D the label of .../images/x.jpg is .../labels/x.txt (the YOLO rule).
+Relative paths in a list file are relative to the dataset root. Absolute paths
+written on another machine are re-anchored to the dataset root via data.yaml's
+`path:`, so a list made on the server still works from a laptop mount.
 
 Images with no label file (or an empty one) are kept deliberately — they are
 the empty-sky frames, and false positives on them are the metric that matters
@@ -60,21 +68,99 @@ def find_data_yaml(root: Path) -> Path | None:
     return hits[0] if hits else None
 
 
-def resolve_split(root: Path, split: str) -> tuple[Path, Path]:
-    """Return (images_dir, labels_dir) for the requested split."""
+_EVALKIT_DIR = Path(__file__).resolve().parents[1]
+
+
+def _yolo_label(img: Path) -> Path:
+    """.../images/<sub>/x.jpg -> .../labels/<sub>/x.txt (last 'images' component)."""
+    parts = list(img.parts)
+    for i in range(len(parts) - 2, -1, -1):
+        if parts[i] == "images":
+            parts[i] = "labels"
+            return Path(*parts).with_suffix(".txt")
+    return img.with_suffix(".txt")
+
+
+def _reanchor(p: str, root: Path, cfg_path: str | None) -> Path:
+    """Make a path from a list file / data.yaml usable on this machine."""
+    q = Path(p).expanduser()
+    if not q.is_absolute():
+        return root / p.removeprefix("./")
+    if not q.exists() and cfg_path:
+        base = cfg_path.rstrip("/") + "/"
+        if p.startswith(base):
+            return root / p[len(base):]
+    return q
+
+
+def _read_list(list_file: Path, root: Path, cfg_path: str | None) -> list[Path]:
+    out = []
+    for line in list_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            out.append(_reanchor(line, root, cfg_path))
+    missing = [p for p in out if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"{len(missing)}/{len(out)} images listed in {list_file} do not exist "
+            f"(e.g. {missing[0]}). Check --dataset points at the dataset root."
+        )
+    return out
+
+
+def resolve_split(root: Path, split: str, cfg: dict) -> tuple[list[Path], dict, str]:
+    """
+    Return (image_paths, labels_by_image, source) for the requested split.
+    labels_by_image maps each image path to its label path.
+    """
     aliases = {"val": ["val", "valid", "validation"], "test": ["test"], "train": ["train"]}
     names = aliases.get(split, [split])
 
+    def from_dir(img_dir: Path, lbl_dir: Path | None, recursive: bool = False):
+        it = img_dir.rglob("*") if recursive else img_dir.iterdir()
+        imgs = [p for p in it if p.suffix.lower() in IMG_EXT]
+        return imgs, {
+            p: (lbl_dir / f"{p.stem}.txt" if lbl_dir else _yolo_label(p)) for p in imgs
+        }
+
+    # A / B: evalkit's own folder layouts
     for n in names:
         a_img, a_lbl = root / "images" / n, root / "labels" / n
         if a_img.is_dir():
-            return a_img, a_lbl
+            return (*from_dir(a_img, a_lbl), str(a_img))
         b_img, b_lbl = root / n / "images", root / n / "labels"
         if b_img.is_dir():
-            return b_img, b_lbl
+            return (*from_dir(b_img, b_lbl), str(b_img))
+
+    cfg_path = cfg.get("path") if isinstance(cfg.get("path"), str) else None
+
+    # C: --split names a list file (relative to cwd, else to the evalkit folder)
+    if split.endswith(".txt"):
+        for cand in (Path(split).expanduser(), _EVALKIT_DIR.parent / split, _EVALKIT_DIR / split):
+            if cand.is_file():
+                imgs = _read_list(cand, root, cfg_path)
+                return imgs, {p: _yolo_label(p) for p in imgs}, str(cand)
+        raise FileNotFoundError(f"Split list file not found: {split}")
+
+    # D: whatever the dataset's data.yaml says the split is
+    entry = next((cfg[n] for n in names if cfg.get(n)), None)
+    if entry is not None:
+        imgs: list[Path] = []
+        for e in entry if isinstance(entry, list) else [entry]:
+            target = _reanchor(str(e), root, cfg_path)
+            if target.is_dir():
+                imgs += from_dir(target, None, recursive=True)[0]
+            elif target.is_file() and target.suffix == ".txt":
+                imgs += _read_list(target, root, cfg_path)
+            else:
+                raise FileNotFoundError(
+                    f"data.yaml says {split}: {e}, but {target} does not exist."
+                )
+        return imgs, {p: _yolo_label(p) for p in imgs}, f"data.yaml {split}: {entry}"
 
     raise FileNotFoundError(
-        f"No '{split}' split under {root}. Expected images/{split}/ or {split}/images/."
+        f"No '{split}' split under {root}. Expected images/{split}/, {split}/images/, "
+        f"a '{split}:' entry in data.yaml, or --split pointing at a .txt list of images."
     )
 
 
@@ -84,7 +170,6 @@ class EvalDataset:
     def __init__(self, root: str | Path, split: str = "val", class_names: list | None = None):
         self.root = Path(root)
         self.split = split
-        self.images_dir, self.labels_dir = resolve_split(self.root, split)
 
         cfg = {}
         yml = find_data_yaml(self.root)
@@ -97,18 +182,23 @@ class EvalDataset:
             names = [names[k] for k in sorted(names)]
         self.class_names = list(names) if names else None
 
-        self.image_paths = sorted(
-            p for p in self.images_dir.iterdir() if p.suffix.lower() in IMG_EXT
-        )
+        imgs, self._labels, self.source = resolve_split(self.root, split, cfg)
+        # Sorted by filename so image ids don't depend on which folder layout
+        # the same frames were reached through; dict.fromkeys drops duplicates.
+        self.image_paths = sorted(dict.fromkeys(imgs), key=lambda p: (p.name, str(p)))
         if not self.image_paths:
-            raise FileNotFoundError(f"No images found in {self.images_dir}")
+            raise FileNotFoundError(f"No images found for split '{split}' ({self.source})")
+
+        if cfg.get("train") and cfg.get(split) == cfg.get("train") and split != "train":
+            print(f"[evalkit] note: data.yaml gives '{split}' the same images as "
+                  f"'train' — this is not a held-out split")
 
         self._build_coco_gt()
 
     # ── ground truth ──────────────────────────────────────────────────────────
 
     def _label_for(self, img_path: Path) -> Path:
-        return self.labels_dir / f"{img_path.stem}.txt"
+        return self._labels[img_path]
 
     def _build_coco_gt(self) -> None:
         images, annotations = [], []

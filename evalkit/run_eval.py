@@ -406,9 +406,11 @@ def main() -> int:
     except FileNotFoundError as exc:
         sys.exit(
             f"{exc}\n"
-            f"Expected one of these layouts under {args.dataset}:\n"
+            f"evalkit finds a split under {args.dataset} in one of these ways:\n"
             f"  images/{args.split}/*.jpg  + labels/{args.split}/*.txt\n"
-            f"  {args.split}/images/*.jpg  + {args.split}/labels/*.txt"
+            f"  {args.split}/images/*.jpg  + {args.split}/labels/*.txt\n"
+            f"  data.yaml with  {args.split}: <folder or .txt list of images>\n"
+            f"  --split path/to/list.txt   (one image path per line)"
         )
     print(f"[evalkit] dataset: {dataset.summary()}")
 
