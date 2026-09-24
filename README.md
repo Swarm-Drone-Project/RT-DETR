@@ -138,6 +138,112 @@ my_dataset/                         my_dataset/            (Roboflow export)
 - Frames with no drone: an empty `.txt`, or no `.txt` at all. Keep them — false
   alarms on empty sky are one of the most important numbers in the report.
 
+If your dataset already looks like this, skip to step 4 and pass its folder to
+`--dataset`.
+
+#### Build the `data_set/` folder from the lab's shared datasets
+
+The team's datasets live on the lab storage at `/srv/work/dataset/labeled/`
+(also reachable as `~/Work/dataset/labeled/` on lab machines). They are **not**
+in the layout above — each keeps all frames in one pool and describes its splits
+in its own way — so evalkit can't read them directly.
+
+The fix is to create a `data_set/` folder in the repo root holding one folder
+per evaluation set, in evalkit's layout. It is made of **shortcuts (symlinks)**
+to the original files: nothing is copied, it takes about a minute, and the
+original dataset is never changed. `data_set/` is in `.gitignore`.
+
+You do this **once per dataset, per machine**. The result:
+
+```
+RT-DETR/
+└── data_set/
+    ├── indrones_full_test/          <- InDrones test videos
+    │   ├── data.yaml
+    │   ├── images/test/*.jpg        (shortcuts)
+    │   └── labels/test/*.txt        (shortcuts)
+    └── unreal_engine_dc_val/        <- Unreal Engine DC val split
+        ├── data.yaml
+        ├── images/val/*.jpg
+        └── labels/val/*.txt
+```
+
+Run everything below **from the repo root**. Pick the recipe that matches how
+your source dataset defines its split, and set the variables at the top.
+
+**Recipe A — the dataset lists its split in a text file** (one image path per
+line), e.g. `Unreal_engine_DC/splits/val.txt`:
+
+```bash
+SRC=/srv/work/dataset/labeled/Unreal_engine_DC   # original dataset
+LIST=$SRC/splits/val.txt                          # file listing the split's images
+OUT=data_set/unreal_engine_dc_val                 # folder to create
+SPLIT=val                                         # split name to use with --split
+
+mkdir -p $OUT/images/$SPLIT $OUT/labels/$SPLIT
+printf "nc: 1\nnames: ['drone']\n" > $OUT/data.yaml
+while read -r img; do
+  lbl=${img/\/images\//\/labels\/}; lbl=${lbl%.*}.txt   # .../images/x.jpg -> .../labels/x.txt
+  ln -sf "$img" $OUT/images/$SPLIT/
+  ln -sf "$lbl" $OUT/labels/$SPLIT/
+done < $LIST
+```
+
+**Recipe B — the split is a set of videos inside one flat pool**, e.g. the
+InDrones test split = these 8 held-out videos:
+
+```bash
+SRC=/srv/work/dataset/labeled/indrones            # original dataset (flat images/ + labels/)
+OUT=data_set/indrones_full_test                   # folder to create
+SPLIT=test                                        # split name to use with --split
+VIDEOS="DJI_20260420174320_0001_V DJI_20260427124906_0005_V
+        DJI_20260427175814_0003_V DJI_20260428132529_0007_V
+        DJI_20260428142741_0005_V DJI_20260430124956_0002_V
+        DJI_20260430145726_0003_V DJI_20260430163419_0003_V"
+
+mkdir -p $OUT/images/$SPLIT $OUT/labels/$SPLIT
+printf "nc: 1\nnames: ['drone']\n" > $OUT/data.yaml
+for v in $VIDEOS; do
+  for img in $SRC/images/${v}_frame_*; do
+    name=$(basename "$img")
+    ln -sf "$img" $OUT/images/$SPLIT/
+    ln -sf "$SRC/labels/${name%.*}.txt" $OUT/labels/$SPLIT/
+  done
+done
+```
+
+**Recipe C — use a whole flat pool as one split**, e.g. `roboflow`:
+
+```bash
+SRC=/srv/work/dataset/labeled/roboflow            # original dataset (flat images/ + labels/)
+OUT=data_set/roboflow_all                         # folder to create
+SPLIT=test                                        # split name to use with --split
+
+mkdir -p $OUT/images $OUT/labels
+printf "nc: 1\nnames: ['drone']\n" > $OUT/data.yaml
+ln -sfn $SRC/images $OUT/images/$SPLIT
+ln -sfn $SRC/labels $OUT/labels/$SPLIT
+```
+
+> Careful with Recipe C: `indrones`, `roboflow` and `antiUAVdata` have no
+> held-out split (their own `data.yaml` says so), so the whole pool includes
+> frames the model may have been trained on. Scores on it are **not** a fair
+> test result. Use Recipe A or B for held-out splits.
+
+**Check the folder you built** — the two counts must be equal, and the last
+number must be `0` (no broken shortcuts):
+
+```bash
+ls $OUT/images/$SPLIT | wc -l
+ls $OUT/labels/$SPLIT | wc -l
+find -L $OUT -type l | wc -l
+```
+
+For the two sets above you should get **19505** (`unreal_engine_dc_val`) and
+**29127** (`indrones_full_test`). If the dataset is stored somewhere else on
+your machine, change `SRC` — and for Recipe A, the paths inside the list file
+must exist on your machine (`head -1 $LIST` and `ls` that path to check).
+
 ### 4. Run the evaluation
 
 All commands run from the repo root with the venv active.
@@ -157,9 +263,8 @@ python evalkit/run_eval.py \
 If a path contains spaces (e.g. `~/Desktop/New Folder/...`), wrap it in quotes:
 `--dataset "/home/me/Desktop/New Folder/my_dataset"`.
 
-**Examples used for the results in this repo.** These datasets are **not in
-git** either. The commands assume a copy has been placed under `data_set/` in
-the repo root; with your own dataset, use the "Any dataset" command above.
+**Examples used for the results in this repo.** Build the two `data_set/`
+folders first (step 3, Recipes A and B), then:
 
 ```bash
 # InDrones test split (8 held-out videos, 29,127 frames)
@@ -225,7 +330,8 @@ Full details are in each run's `summary.txt`.
 | gdown: `Cannot retrieve the public link of the file` | The Drive file is not public — use the browser download in step 2 |
 | `UnpicklingError` / `invalid load key` when loading weights | The download is broken (often an HTML page saved as `.pth`) — check size and sha256 in step 2 |
 | `CUDA` errors, or torch says no GPU | Check step 1's `torch.cuda.is_available()`; reinstall torch for your CUDA version |
-| `No 'test' split under …` | The folder layout doesn't match step 3, or the `--split` name is wrong |
+| `Dataset folder not found: data_set/…` | `data_set/` is not in git — build it on this machine first (step 3, "Build the `data_set/` folder") |
+| `No 'test' split under …` | The folder layout doesn't match step 3, or the `--split` name is wrong. For the lab's shared datasets, build a `data_set/` folder (step 3) and pass that instead |
 | All metrics are `nan` | The split has no labels — check `labels/<split>/` exists and the `.txt` names match the images |
 
 More on evalkit itself (metrics, protocol, other model formats): `evalkit/README.md`.
