@@ -117,9 +117,6 @@ python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
     --device cuda --name train_robo_unrealdc_val
 ```
 
-**No GPU?** Use `--device cpu --skip-latency`. Accuracy numbers are the same;
-latency is skipped because CPU timings are not comparable.
-
 Useful options:
 
 | Option | What it does |
