@@ -236,7 +236,7 @@ python evalkit/run_eval.py \
 If a path contains spaces (e.g. `~/Desktop/New Folder/...`), wrap it in quotes:
 `--dataset "/home/me/Desktop/New Folder/my_dataset"`.
 
-**Examples used for the results in this repo** (run as-is on a lab machine):
+**Commands for each lab dataset** (run as-is on a lab machine):
 
 ```bash
 # Unreal Engine DC val split (19,505 frames) — split comes from the dataset's data.yaml
@@ -247,12 +247,61 @@ python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
 # InDrones test split (8 held-out videos, 29,127 frames) — split comes from the repo's list file
 python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
     --dataset /srv/work/dataset/labeled/indrones --split evalkit/splits/indrones_test.txt \
-    --device cuda --name train_robo_indrones_gpu
+    --device cuda --name train_robo_indrones
+
+# InDrones corrections, same test frames (29,127 frames) — same list file as InDrones
+python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
+    --dataset /srv/work/dataset/labeled/indrones_corrections --split evalkit/splits/indrones_test.txt \
+    --device cuda --name train_robo_indrones_corrections_test
+
+# Anti-UAV test split (170,748 frames) — first make the list file (once), then run
+ls /srv/work/dataset/labeled/antiUAVdata/images | grep '^test_' | sed 's#^#images/#' \
+    > evalkit/splits/antiuav_test.txt
+python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
+    --dataset /srv/work/dataset/labeled/antiUAVdata --split evalkit/splits/antiuav_test.txt \
+    --device cuda --name train_robo_antiuav_test
+
+# Roboflow test split (6,280 frames) — first make the list file (once), then run
+# (see the Roboflow note in step 3: the model was trained on Roboflow data)
+ls /srv/work/dataset/labeled/roboflow/images | grep '^test_' | sed 's#^#images/#' \
+    > evalkit/splits/roboflow_test.txt
+python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
+    --dataset /srv/work/dataset/labeled/roboflow --split evalkit/splits/roboflow_test.txt \
+    --device cuda --name train_robo_roboflow_test
 ```
 
-Check the `[evalkit] dataset:` line printed at the start. For these two it
-must say `'images': 19505` and `'images': 29127`; if not, the dataset path or
-split is wrong.
+The `ls ... > evalkit/splits/...` line prints nothing — its output goes into
+the file. You only run it once; after that, just the `python` command. If you
+skip it, evalkit stops with `Split list file not found`.
+
+Check the `[evalkit] dataset:` line printed at the start. It must show:
+
+| Run | `'images':` |
+|---|---|
+| Unreal Engine DC | 19505 |
+| InDrones / InDrones corrections | 29127 |
+| Anti-UAV | 170748 |
+| Roboflow | 6280 |
+
+If not, the dataset path or split is wrong.
+
+**Any other dataset** — work out its split (step 3), then:
+
+```bash
+# 1. Look at it: what does data.yaml say for val / test?
+cat /srv/work/dataset/labeled/<dataset>/data.yaml
+
+# 2a. If it defines a real held-out split (images/test/, or val: splits/val.txt):
+python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
+    --dataset /srv/work/dataset/labeled/<dataset> --split test \
+    --device cuda --name train_robo_<dataset>_test
+
+# 2b. If it doesn't (data.yaml says val: images): make a list of the test
+#     images once (step 3, "Make a split list file"), then:
+python evalkit/run_eval.py --format rtdetrv2 --weights train_robo.pth \
+    --dataset /srv/work/dataset/labeled/<dataset> --split evalkit/splits/<dataset>_test.txt \
+    --device cuda --name train_robo_<dataset>_test
+```
 
 Useful options:
 
