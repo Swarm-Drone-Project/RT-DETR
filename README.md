@@ -35,17 +35,65 @@ pip install -r rtdetrv2_pytorch/requirements.txt -r evalkit/requirements.txt
 Tested with Python 3.12, torch 2.13, torchvision 0.28, numpy 2.5, opencv 5.0,
 pycocotools 2.0.11.
 
-### 2. Download the weights and place them
-
-Download the checkpoint from the Google Drive link at the top of this file and
-save it in the **repo root** as `train_robo.pth`:
+Check that PyTorch can see the GPU — this must print `True`:
 
 ```bash
-# in the browser: open the link above -> Download
-# or from the terminal:
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+If it prints `False`, the installed torch build does not match the machine's
+CUDA driver: reinstall torch using the command for your CUDA version from
+https://pytorch.org.
+
+> Every new terminal: `cd` into the repo and run `source .venv/bin/activate`
+> again before any command below.
+
+### 2. Download the weights and place them
+
+The weights are **not in git** (too large). Download them from Google Drive:
+
+https://drive.google.com/file/d/1IYMBePuUbDc-XlKewqYTOo0g3I8FiGzx/view?usp=drive_link
+
+**Option A — terminal** (works only if the file is shared as "Anyone with the link"):
+
+```bash
 pip install gdown
 gdown 1IYMBePuUbDc-XlKewqYTOo0g3I8FiGzx -O train_robo.pth
 ```
+
+**Option B — browser** (use this if Option A fails):
+
+1. Open the link above in a browser, signed in to a Google account that has
+   access to the file.
+2. Click **Download**. Google may warn that it can't scan a file this large for
+   viruses — click **Download anyway**.
+3. Move the downloaded file into the repo root and name it exactly
+   `train_robo.pth`. For example, if it landed in `~/Downloads`:
+   ```bash
+   mv ~/Downloads/<downloaded-file-name>.pth ./train_robo.pth
+   ```
+
+**If gdown says `Cannot retrieve the public link of the file`**, or the browser
+says **"You need access"**: the file is not shared publicly. Click
+**Request access** in the browser, or ask the RT-DETR maintainers to set the
+file's sharing to *Anyone with the link → Viewer*. There is nothing wrong with
+your setup.
+
+**Check you have the right file.** Run this in the repo root:
+
+```bash
+ls -l train_robo.pth        # size must be 477254729 bytes
+sha256sum train_robo.pth    # must print the value below
+```
+
+```
+8e66ffe0fc2b4cc3cdefffe1f4076eb181aac3bef30298029c9bb28263b3e683
+```
+
+If the size or the checksum differs, the download is incomplete or it is a
+different checkpoint. Download it again, and don't compare your numbers with
+the results below until it matches. A small file (a few KB) is usually a
+Google Drive HTML error page, not the weights.
 
 The folder should then look like this:
 
@@ -103,7 +151,12 @@ python evalkit/run_eval.py \
     --name    train_robo_my_dataset
 ```
 
-**Examples used for the results in this repo:**
+If a path contains spaces (e.g. `~/Desktop/New Folder/...`), wrap it in quotes:
+`--dataset "/home/me/Desktop/New Folder/my_dataset"`.
+
+**Examples used for the results in this repo.** These datasets are **not in
+git** either. The commands assume a copy has been placed under `data_set/` in
+the repo root; with your own dataset, use the "Any dataset" command above.
 
 ```bash
 # InDrones test split (8 held-out videos, 29,127 frames)
@@ -166,6 +219,9 @@ Full details are in each run's `summary.txt`.
 | `RT-DETR code not found at …` | Run from a full clone of this repo. If `rtdetrv2_pytorch/` is somewhere else, set `RTDETR_ROOT=/path/to/rtdetrv2_pytorch` |
 | `size mismatch` in `load_state_dict` | The checkpoint is not the grayscale r18 drone model. Add its config to `_CONFIG_FOR_WEIGHTS` in `evalkit/adapters/rtdetrv2_adapter.py` |
 | `Weights not found` | Check the `--weights` path (step 2) |
+| gdown: `Cannot retrieve the public link of the file` | The Drive file is not public — use the browser download in step 2 |
+| `UnpicklingError` / `invalid load key` when loading weights | The download is broken (often an HTML page saved as `.pth`) — check size and sha256 in step 2 |
+| `CUDA` errors, or torch says no GPU | Check step 1's `torch.cuda.is_available()`; reinstall torch for your CUDA version |
 | `No 'test' split under …` | The folder layout doesn't match step 3, or the `--split` name is wrong |
 | All metrics are `nan` | The split has no labels — check `labels/<split>/` exists and the `.txt` names match the images |
 
