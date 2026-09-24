@@ -144,20 +144,78 @@ folder (or absolute). If the dataset lives at a different path on your machine,
 just point `--dataset` at it — paths inside list files are re-anchored
 automatically using `path:` in the dataset's `data.yaml`.
 
-> **Held-out splits only.** `indrones`, `roboflow` and `antiUAVdata` have no
-> held-out split — their `data.yaml` gives `val` and `test` the whole pool,
-> including frames the model may have been trained on. evalkit prints
+> **Held-out splits only.** The `data.yaml` of `indrones`, `roboflow` and
+> `antiUAVdata` gives `val` and `test` the whole pool, including frames the
+> model may have been trained on. evalkit prints
 > `note: ... this is not a held-out split` when that happens. Those scores are
 > **not** a fair test result. Use a real split, like the ones below.
 
-**Splits kept in this repo** (`evalkit/splits/`):
+#### The lab's datasets — what to pass
+
+All under `/srv/work/dataset/labeled/`. Put the two values into the command in
+step 4.
+
+| Dataset | `--dataset` | `--split` | Images | Fair test? |
+|---|---|---|---|---|
+| Unreal Engine DC | `/srv/work/dataset/labeled/Unreal_engine_DC` | `val` | 19,505 | ✅ held-out (from its `data.yaml`) |
+| InDrones | `/srv/work/dataset/labeled/indrones` | `evalkit/splits/indrones_test.txt` | 29,127 | ✅ 8 held-out videos (list in this repo) |
+| InDrones corrections | `/srv/work/dataset/labeled/indrones_corrections` | `evalkit/splits/indrones_test.txt` | 29,127 | ✅ same 29,127 frames, from the corrections copy |
+| Roboflow | `/srv/work/dataset/labeled/roboflow` | a `test_` list — make it below | 6,280 | ⚠️ see note |
+| Anti-UAV | `/srv/work/dataset/labeled/antiUAVdata` | a `test_` list — make it below | 170,748 | ✅ original Anti-UAV test split |
+| `unreal_engine` | `/srv/work/dataset/labeled/unreal_engine` | a list — make it below | — | no split defined; no `data.yaml`, so the class shows as `0` |
+
+Passing `--split val` or `test` to `indrones`, `indrones_corrections`,
+`roboflow` or `antiUAVdata` scores the **whole pool** (training frames
+included) — don't use those numbers as test results.
+
+> **Roboflow note.** `train_robo.pth` was trained on the Roboflow
+> `drones_new` dataset (link at the top). The `test_` images are that export's
+> test split, so they are held out only if training used the `train_` images
+> alone. Check before reporting it as a test result.
+
+#### Splits kept in this repo (`evalkit/splits/`)
+
+A split the dataset doesn't define itself lives here as a list file, so
+everyone scores the same frames:
 
 | File | What it is |
 |---|---|
 | `indrones_test.txt` | InDrones test split: all 29,127 frames of the 8 held-out videos (listed at the top of the file) |
 
-To add a split for another dataset, put a list file in `evalkit/splits/` and
-pass it with `--split`.
+#### Make a split list file
+
+A list file is one image path per line, relative to the dataset folder
+(`images/x.jpg`). Make one with a single command from the repo root, then pass
+it with `--split`. Lines starting with `#` are comments.
+
+**By filename prefix** — for datasets whose file names carry the original
+split (`test_...`, `train_...`, `val_...`), i.e. `roboflow` and `antiUAVdata`:
+
+```bash
+ls /srv/work/dataset/labeled/roboflow/images | grep '^test_' | sed 's#^#images/#' \
+    > evalkit/splits/roboflow_test.txt        # 6,280 lines
+
+ls /srv/work/dataset/labeled/antiUAVdata/images | grep '^test_' | sed 's#^#images/#' \
+    > evalkit/splits/antiuav_test.txt         # 170,748 lines
+```
+
+**By video / episode** — for a flat pool of frames named `<video>_frame_...`
+(this is how `indrones_test.txt` was made):
+
+```bash
+SRC=/srv/work/dataset/labeled/indrones        # the dataset
+VIDEOS="DJI_20260420174320_0001_V DJI_20260427124906_0005_V"   # videos to hold out
+ls $SRC/images | grep -E "^($(echo $VIDEOS | tr ' ' '|'))_" | sed 's#^#images/#' \
+    > evalkit/splits/my_split.txt
+```
+
+Check it: `grep -vc '^#' evalkit/splits/my_split.txt` gives the number of
+images, and the `[evalkit] dataset:` line of the run must show the same number.
+
+Which videos or files form a fair test set is a decision about the data, not
+the code — ask whoever owns the dataset. Once agreed, commit the list file to
+`evalkit/splits/` so everyone uses the same frames. (A list of ~170k images is
+~8 MB — fine for git, well under GitHub's 100 MB limit.)
 
 ### 4. Run the evaluation
 
